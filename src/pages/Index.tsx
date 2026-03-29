@@ -27,48 +27,7 @@ const Index = () => {
   const [predictedDigit, setPredictedDigit] = useState<number | null>(null);
 
   const handlePredict = useCallback((imageData: ImageData) => {
-    // Simulate CNN prediction from pixel data
-    const pixels = imageData.data;
-    const sums = Array(10).fill(0);
-
-    // Analyze pixel distribution to create pseudo-predictions
-    let totalWhite = 0;
-    let centerMass = { x: 0, y: 0, count: 0 };
-    const w = imageData.width;
-
-    for (let i = 0; i < pixels.length; i += 4) {
-      const brightness = pixels[i];
-      if (brightness > 50) {
-        totalWhite += brightness;
-        const px = (i / 4) % w;
-        const py = Math.floor(i / 4 / w);
-        centerMass.x += px;
-        centerMass.y += py;
-        centerMass.count++;
-      }
-    }
-
-    if (centerMass.count > 0) {
-      centerMass.x /= centerMass.count;
-      centerMass.y /= centerMass.count;
-    }
-
-    // Generate pseudo-realistic confidence distribution
-    const seed = (totalWhite * 7 + centerMass.x * 13 + centerMass.y * 17) % 10;
-    const primary = Math.floor(seed);
-
-    for (let i = 0; i < 10; i++) {
-      if (i === primary) {
-        sums[i] = 0.7 + Math.random() * 0.25;
-      } else {
-        sums[i] = Math.random() * 0.08;
-      }
-    }
-
-    // Normalize
-    const total = sums.reduce((a, b) => a + b, 0);
-    const normalized = sums.map((s) => s / total);
-
+    const normalized = recognizeDigit(imageData);
     setPredictions(normalized);
     setPredictedDigit(normalized.indexOf(Math.max(...normalized)));
   }, []);
