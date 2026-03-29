@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Brain, Gamepad2, BarChart3, Layers, Eye, AlertTriangle, Sparkles } from "lucide-react";
+import { recognizeDigit } from "@/lib/digitRecognizer";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ConfidenceDisplay from "@/components/ConfidenceDisplay";
 import ModelComparison from "@/components/ModelComparison";
