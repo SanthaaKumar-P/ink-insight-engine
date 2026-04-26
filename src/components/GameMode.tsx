@@ -1,37 +1,40 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Zap, Target, Star } from "lucide-react";
+import { Trophy, Zap, Target, Star, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DrawingCanvas from "./DrawingCanvas";
+import { recognizeDigit } from "@/lib/digitRecognizer";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 
 const GameMode = () => {
+  const { user } = useAuth();
   const [targetDigit, setTargetDigit] = useState(() => Math.floor(Math.random() * 10));
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [round, setRound] = useState(1);
   const [feedback, setFeedback] = useState<{ correct: boolean; digit: number } | null>(null);
   const [history, setHistory] = useState<{ target: number; predicted: number; correct: boolean }[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const handlePredict = useCallback(
     (imageData: ImageData) => {
-      // Simulate prediction - in production would use TF.js model
-      const pixels = imageData.data;
-      let sum = 0;
-      for (let i = 0; i < pixels.length; i += 4) {
-        sum += pixels[i];
-      }
-      // Use pixel density to create a pseudo-random but consistent prediction
-      const predicted = Math.abs(Math.round(sum / 10000)) % 10;
-      // 60% chance of being correct for gamification fun
-      const isCorrect = Math.random() > 0.4 ? true : predicted === targetDigit;
-      const finalPredicted = isCorrect ? targetDigit : predicted;
+      const predictions = recognizeDigit(imageData);
+      const predicted = predictions.indexOf(Math.max(...predictions));
+      const isCorrect = predicted === targetDigit;
 
-      setFeedback({ correct: isCorrect, digit: finalPredicted });
-      setHistory((h) => [...h, { target: targetDigit, predicted: finalPredicted, correct: isCorrect }]);
+      setFeedback({ correct: isCorrect, digit: predicted });
+      setHistory((h) => [...h, { target: targetDigit, predicted, correct: isCorrect }]);
 
       if (isCorrect) {
         setScore((s) => s + 10 + streak * 5);
-        setStreak((s) => s + 1);
+        setStreak((s) => {
+          const next = s + 1;
+          setBestStreak((b) => Math.max(b, next));
+          return next;
+        });
       } else {
         setStreak(0);
       }
@@ -48,9 +51,29 @@ const GameMode = () => {
   const resetGame = () => {
     setScore(0);
     setStreak(0);
+    setBestStreak(0);
     setRound(1);
     setHistory([]);
     setTargetDigit(Math.floor(Math.random() * 10));
+  };
+
+  const saveScore = async () => {
+    if (!user) {
+      toast({ title: "Sign in required", description: "Log in to save your score", variant: "destructive" });
+      return;
+    }
+    if (history.length === 0) return;
+    setSaving(true);
+    const { error } = await supabase.from("game_scores").insert({
+      user_id: user.id,
+      score,
+      best_streak: bestStreak,
+      rounds_played: history.length,
+      accuracy: (history.filter((h) => h.correct).length / history.length) * 100,
+    });
+    setSaving(false);
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    else toast({ title: "Score saved!" });
   };
 
   const accuracy = history.length > 0 ? (history.filter((h) => h.correct).length / history.length) * 100 : 0;
@@ -114,9 +137,13 @@ const GameMode = () => {
         </div>
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-3">
         <Button variant="outline" onClick={resetGame} className="border-primary/30 hover:border-primary">
           Reset Game
+        </Button>
+        <Button onClick={saveScore} disabled={saving || history.length === 0}>
+          <Save className="w-4 h-4 mr-2" />
+          {saving ? "Saving..." : "Save Score"}
         </Button>
       </div>
 
